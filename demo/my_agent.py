@@ -10,6 +10,7 @@ from pinecone import Pinecone
 from typing import Optional, List, Dict, Any, Generator
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+import streamlit as st
 
 load_dotenv()
 
@@ -47,37 +48,25 @@ def load_chunker(seq: pd.DataFrame, size: int) -> Generator[pd.DataFrame, None, 
     for pos in range(0, len(seq), size):
         yield seq.iloc[pos:pos + size]
 
+
 def embed_and_upload_to_pinecone(
-    url: Optional[str] = None,
-    text: Optional[str] = None,
+    file_bytes: bytes,
+    file_name: str,
     chunk_size: int = 800,
     chunk_overlap: int = 200,
     embedding_model: str = "text-embedding-3-small"
 ) -> Dict[str, Any]:
-    """
-    Processes text from a URL (PDF/TXT) or raw string, chunks it,
-    creates embeddings, and upserts to a Pinecone index.
-    """
-    index = pc.Index('sage')
-    raw_text = ""
 
-    if url:
+    raw_text = ""
+    if file_name.lower().endswith('.pdf'):
         try:
-            response = requests.get(url)
-            response.raise_for_status()
-            if url.lower().endswith('.pdf'):
-                with fitz.open(stream=response.content, filetype="pdf") as doc:
-                    raw_text = "".join(page.get_text() for page in doc)
-            elif url.lower().endswith('.txt'):
-                raw_text = response.text
-            else:
-                return {"status": "error", "message": "Unsupported file type. URL must end in .pdf or .txt"}
-        except requests.exceptions.RequestException as e:
-            return {"status": "error", "message": f"Failed to download or access URL: {e}"}
-    elif text:
-        raw_text = text
+            # Read directly from bytes
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                raw_text = "".join(page.get_text() for page in doc)
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to read PDF bytes: {e}"}
     else:
-        return {"status": "error", "message": "No input provided. You must specify either 'url' or 'text'."}
+        return {"status": "error", "message": "Unsupported file type. Only PDF is supported via upload."}
 
     if not raw_text:
         return {"status": "error", "message": "Extracted text is empty. Nothing to process."}
@@ -113,14 +102,11 @@ def embed_and_upload_to_pinecone(
         "status": "success",
         "total_chunks_processed": len(chunks),
         "total_vectors_upserted": total_upserted,
-        "index_name": 'sage'
+        "index_name": 'sage',
+        "processed_file": file_name
     }
 
 def get_context(query: str, embed_model: str = 'text-embedding-3-small', k: int = 5) -> Dict[str, Any]:
-    """
-    Retrieves relevant text contexts from the Pinecone index
-    based on a user's search query.
-    """
     try:
         index = pc.Index('sage')
         query_embeddings = get_embeddings(query, model=embed_model)
@@ -144,17 +130,16 @@ tools = [
         "type": "function",
         "function": {
             "name": "embed_and_upload_to_pinecone",
-            "description": "Processes text from a URL (PDF/TXT) or raw string, chunks it, creates embeddings, and upserts to Pinecone. One of 'url' or 'text' must be provided.",
+            "description": "Processes an uploaded PDF file, chunks it, creates embeddings, and upserts to Pinecone. The file must be uploaded in the UI first.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "The URL of the PDF or TXT file to process. If provided, the 'text' parameter is ignored."},
-                    "text": {"type": "string", "description": "A string of raw text to process. This is used only if the 'url' parameter is not provided."},
+                    "file_name": {"type": "string", "description": "The name of the file that has been uploaded by the user and is ready for processing."},
                     "chunk_size": {"type": "integer", "default": 800},
                     "chunk_overlap": {"type": "integer", "default": 200},
                     "embedding_model": {"type": "string", "default": "text-embedding-3-small"}
                 },
-                # "required": ["url"]
+                "required": ["file_name"]
             }
         }
     },
@@ -182,96 +167,173 @@ available_tools = {
 }
 
 def main():
-    """
-    Main loop to run the chat-with-tools.
-    """
-    print("Starting chat... (type 'quit' to exit)")
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant. You have two tools: one to upload documents to a Pinecone index, and one to retrieve context from it to answer questions."}
-    ]
 
-    while True:
-        try:
-            # Get user input
-            user_prompt = input("You: ")
-            if user_prompt.lower() == 'quit':
-                print("Ending chat. Goodbye!")
-                break
+    st.set_page_config(page_title="SAGE Assistant")
+    st.title("S.A.G.E. Assistant")
+
+    with st.sidebar:
+        st.header("File Upload")
+        uploaded_file = st.file_uploader("Upload a PDF to process", type="pdf")
+        
+        if uploaded_file is not None:
+            if st.session_state.get("uploaded_file_name") != uploaded_file.name:
+                st.session_state.uploaded_file_bytes = uploaded_file.read()
+                st.session_state.uploaded_file_name = uploaded_file.name
+                st.success(f"File '{uploaded_file.name}' loaded. Ask the assistant to process it.")
+        
+        if "uploaded_file_name" in st.session_state:
+             st.info(f"File in memory: {st.session_state.uploaded_file_name}")
+
+    if "messages" not in st.session_state:
+        st.session_state.base_system_prompt = "You are a helpful assistant. You have two tools: one to upload documents to a Pinecone index, and one to retrieve context from it to answer questions."
+        st.session_state.messages = [
+            {"role": "system", "content": st.session_state.base_system_prompt}
+        ]
+
+    for message in st.session_state.messages:
+        role = message.get("role")
+        if role == "system":
+            continue
+        
             
-            messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message(role):
+            if role == "user":
+                st.write(message.get("content"))
+            
+            elif role == "assistant":
+                content = message.get("content")
+                tool_calls = message.get("tool_calls")
+                
+                if content:
+                    st.write(content)
+                    
+                if tool_calls:
+                    st.write("Calling tools... _hang on!_")
+                    for tool_call in tool_calls:
+                        func_name = tool_call.get("function", {}).get("name")
+                        func_args = tool_call.get("function", {}).get("arguments")
+                        if func_name:
+                             with st.expander(f"Tool Call: `{func_name}`"):
+                                 try:
+                                     st.json(func_args)
+                                 except:
+                                     st.write(func_args)
+            
+            elif role == "tool":
+                tool_name = message.get("name")
+                tool_content = message.get("content")
+                with st.expander(f"Tool Result: `{tool_name}`"):
+                    try:
+                        st.json(tool_content)
+                    except:
+                        st.write(tool_content)
 
-            # --- First API Call: Get model response or tool call ---
+    if user_prompt := st.chat_input("What would you like to do?"):
+        
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.write(user_prompt)
+
+        try:
+            messages_for_api = [msg for msg in st.session_state.messages]
+            current_system_prompt = st.session_state.base_system_prompt
+            
+            if "uploaded_file_name" in st.session_state:
+                file_context = (
+                    f" \n\nIMPORTANT CONTEXT: A file named '{st.session_state.uploaded_file_name}' "
+                    "has been uploaded by the user and is in memory. "
+                    "Make the tool call 'embed_and_upload_to_pinecone' using this file name."
+                )
+                current_system_prompt += file_context
+
+            messages_for_api[0] = {"role": "system", "content": current_system_prompt}
+
             response = client.chat.completions.create(
-                model="gpt-4o",  # Or your preferred model
-                messages=messages,
+                model="gpt-4o",
+                messages=messages_for_api, 
                 tools=tools,
                 tool_choice="auto",
             )
+            
             response_message = response.choices[0].message
+            st.session_state.messages.append(response_message.to_dict())
             tool_calls = response_message.tool_calls
 
-            # --- Check if the model wants to call a tool ---
             if tool_calls:
-                # Append the assistant's request to the message history
-                messages.append(response_message)
+                with st.chat_message("assistant"):
+                    st.write("Calling tools...")
+                    for tool_call in tool_calls:
+                         with st.expander(f"Tool Call: `{tool_call.function.name}`"):
+                             st.json(tool_call.function.arguments)
                 
-                # --- Execute all tool calls ---
                 for tool_call in tool_calls:
                     function_name = tool_call.function.name
                     function_to_call = available_tools.get(function_name)
                     
                     if not function_to_call:
-                        print(f"Error: Model tried to call unknown function '{function_name}'")
-                        continue
-                        
-                    try:
-                        # Parse the JSON arguments
-                        function_args = json.loads(tool_call.function.arguments)
-                        
-                        print(f"--- Calling Tool: {function_name}({function_args}) ---")
-                        
-                        # Call the corresponding Python function
-                        function_response = function_to_call(**function_args)
-                        
-                        print(f"--- Tool Response: {function_response} ---")
-                        
-                        # Append the tool's output to the message history
-                        messages.append(
-                            {
-                                "tool_call_id": tool_call.id,
-                                "role": "tool",
-                                "name": function_name,
-                                "content": json.dumps(function_response),  # Convert response to JSON string
-                            }
-                        )
-                    except Exception as e:
-                        print(f"Error executing tool {function_name}: {e}")
-                        messages.append(
-                            {
-                                "tool_call_id": tool_call.id,
-                                "role": "tool",
-                                "name": function_name,
-                                "content": json.dumps({"status": "error", "message": str(e)}),
-                            }
-                        )
+                        function_response = json.dumps({"status": "error", "message": f"Unknown function '{function_name}'"})
+                    else:
+                        try:
+                            function_args = json.loads(tool_call.function.arguments)
+                            function_response_data = {}
+
+                            if function_name == "embed_and_upload_to_pinecone":
+                                if "uploaded_file_bytes" in st.session_state:
+                                    
+                                    function_response_data = function_to_call(
+                                        file_bytes=st.session_state.uploaded_file_bytes,
+                                        file_name=st.session_state.uploaded_file_name,
+                                        chunk_size=function_args.get("chunk_size", 800),
+                                        chunk_overlap=function_args.get("chunk_overlap", 200),
+                                        embedding_model=function_args.get("embedding_model", "text-embedding-3-small")
+                                    )
+                                    
+                                    
+                                else:
+                                    function_response_data = {"status": "error", "message": "No file found in memory. Please upload a file using the sidebar first."}
+                            else:
+                                function_response_data = function_to_call(**function_args)
+                            
+                            function_response = json.dumps(function_response_data)
+
+                        except Exception as e:
+                            function_response = json.dumps({"status": "error", "message": str(e)})
+
+                    tool_message = {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": function_response,
+                    }
+                    st.session_state.messages.append(tool_message)
+
+                    with st.chat_message("tool"):
+                        with st.expander(f"Tool Result: `{function_name}`"):
+                            try:
+                                st.json(function_response)
+                            except:
+                                st.write(function_response)
 
                 final_response = client.chat.completions.create(
                     model="gpt-4o",
-                    messages=messages,
+                    messages=st.session_state.messages,
                 )
                 final_answer = final_response.choices[0].message.content
-                print(f"Assistant: {final_answer}")
-                messages.append({"role": "assistant", "content": final_answer})
+                st.session_state.messages.append({"role": "assistant", "content": final_answer})
+                with st.chat_message("assistant"):
+                    st.write(final_answer)
 
             else:
-                # --- No tool call, just a direct answer ---
                 assistant_response = response_message.content
-                print(f"Assistant: {assistant_response}")
-                messages.append({"role": "assistant", "content": assistant_response})
+                with st.chat_message("assistant"):
+                    st.write(assistant_response)
 
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            break
+            st.error(f"An unexpected error occurred: {e}")
+        if "uploaded_file_bytes" in st.session_state:
+            del st.session_state.uploaded_file_bytes
+        if "uploaded_file_name" in st.session_state:
+            del st.session_state.uploaded_file_name
 
 if __name__ == "__main__":
     main()
