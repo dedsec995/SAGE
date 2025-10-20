@@ -39,6 +39,7 @@ def load_chunks(split_text: List[str], model: str) -> pd.DataFrame:
     ids = generate_ids(len(split_text), 7)
     for i, chunk in enumerate(split_text):
         df.loc[i] = [ids[i], get_embeddings(chunk, model=model), {'text': chunk}]
+        print("Embedding....")
     return df
 
 def convert_data(chunk: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -56,20 +57,22 @@ def embed_and_upload_to_pinecone(
     chunk_overlap: int = 200,
     embedding_model: str = "text-embedding-3-small"
 ) -> Dict[str, Any]:
-
+    print("Helo Helo In here")
     raw_text = ""
     if file_name.lower().endswith('.pdf'):
         try:
-            # Read directly from bytes
             with fitz.open(stream=file_bytes, filetype="pdf") as doc:
                 raw_text = "".join(page.get_text() for page in doc)
+                raw_text = raw_text.replace("\n", "")
         except Exception as e:
             return {"status": "error", "message": f"Failed to read PDF bytes: {e}"}
     else:
         return {"status": "error", "message": "Unsupported file type. Only PDF is supported via upload."}
-
+    print("Processing Raw Text")
     if not raw_text:
         return {"status": "error", "message": "Extracted text is empty. Nothing to process."}
+    print("raw_text Processeed")
+    print(f"raw_text {len(raw_text)}")
 
     my_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap, length_function=len
@@ -77,17 +80,17 @@ def embed_and_upload_to_pinecone(
     chunks = my_splitter.split_text(raw_text)
     if not chunks:
         return {"status": "error", "message": "Text splitting resulted in zero chunks."}
-
+    print('chunky ready to eat')
     try:
         my_df = load_chunks(chunks, model=embedding_model)
     except Exception as e:
         return {"status": "error", "message": f"Failed to generate embeddings: {e}"}
-
+    print("Done almost. Uploading now")
     try:
         target_index = pc.Index('sage')
     except Exception as e:
         return {"status": "error", "message": f"Failed to connect to Pinecone index '{'sage'}': {e}"}
-
+    print("index ready")
     total_upserted = 0
     batch_size = 100
     try:
@@ -97,7 +100,7 @@ def embed_and_upload_to_pinecone(
             total_upserted += len(vectors)
     except Exception as e:
         return {"status": "error", "message": f"Failed during Pinecone upsert: {e}"}
-
+    print("uploaded")
     return {
         "status": "success",
         "total_chunks_processed": len(chunks),
@@ -185,7 +188,14 @@ def main():
              st.info(f"File in memory: {st.session_state.uploaded_file_name}")
 
     if "messages" not in st.session_state:
-        st.session_state.base_system_prompt = "You are a helpful assistant. You have two tools: one to upload documents to a Pinecone index, and one to retrieve context from it to answer questions."
+        st.session_state.base_system_prompt = (
+            "You are 'Sage,' an empathetic and supportive AI assistant. Your primary purpose is to provide a safe, non-judgmental space for users to express their feelings and to help them find constructive ways to navigate their emotions."
+            "Try to retrive information using the tool, most of the time."
+            "TOOLS: "
+            "1. `get_context`: When a user expresses feelings (like sadness, anxiety, stress, loneliness) or asks for advice, strategies, or perspectives on an emotional situation, you MUST use this tool. Formulate a search query for the tool based on their core feeling or problem (e.g., 'how to cope with anxiety', 'feeling lonely', 'managing stress from work'). Base your supportive response on the retrieved context. "
+            "2. `embed_and_upload_to_pinecone`: This is an administrative tool. You should ONLY use this if the user (an admin) explicitly asks you to process or add a newly uploaded file to your knowledge base. "
+
+        )
         st.session_state.messages = [
             {"role": "system", "content": st.session_state.base_system_prompt}
         ]
