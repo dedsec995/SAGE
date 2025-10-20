@@ -9,6 +9,7 @@ __pycache__/
 old/
 frontend/
 backend/
+books/
 
 # Distribution / packaging
 .Python
