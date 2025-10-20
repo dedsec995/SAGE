@@ -3,3 +3,4 @@ pandas
 pymupdf
 pinecone
 langchain_text_splitters
+openai
