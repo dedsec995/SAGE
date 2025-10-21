@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any, Generator
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 import streamlit as st
-
+import streamlit.components.v1 as com
 load_dotenv()
 
 
@@ -172,7 +172,13 @@ available_tools = {
 def main():
 
     st.set_page_config(page_title="SAGE Assistant")
-    st.title("S.A.G.E. Assistant")
+    # st.title("S.A.G.E. Assistant")
+    col1, col2 = st.columns([8,7])
+    with col1:
+        st.title("S.A.G.E. Assistant")
+    with col2:
+        com.iframe("https://lottie.host/embed/74230abb-884a-444d-92fe-273821e58451/YfEl3zsnUd.lottie", height=100)
+
 
     with st.sidebar:
         st.header("File Upload")
