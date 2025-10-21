@@ -238,7 +238,7 @@ def main():
                     except:
                         st.write(tool_content)
 
-    if user_prompt := st.chat_input("What would you like to do?"):
+    if user_prompt := st.chat_input("How are you feeling today?"):
         
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
