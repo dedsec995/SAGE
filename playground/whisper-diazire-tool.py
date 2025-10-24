@@ -14,20 +14,22 @@ HF_TOKEN = os.getenv('HF_TOKEN')
 
 def transcribe_with_diarization(audio_path, output_file):
     """
-    Transcribes an audio file with speaker diarization.
+    Transcribes an audio file with speaker diarization and returns the segments
+    in the format: [[start_time, end_time, speaker_name, actual_text], ...].
 
     Args:
         audio_path (str): Path to the input audio file.
-        output_file (str): Path to save the transcription.
+        output_file (str): Path to save the transcription (for file output).
+        
+    Returns:
+        list: A list of lists containing the transcribed and diarized segments.
     """
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cuda":
-        print("Using GPU")
+        pass
     else:
-        print("Using CPU")
-
-    print("Loading diarization pipeline...")
+        pass
     try:
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
@@ -35,26 +37,15 @@ def transcribe_with_diarization(audio_path, output_file):
         )
         pipeline.to(torch.device(device))
     except Exception as e:
-        print(f"Error loading pyannote pipeline: {e}")
-        print("Please ensure you have a valid Hugging Face token (HF_TOKEN)")
-        print("and accepted the model's user agreement on Hugging Face.")
-        return
-
-    print(f"Running diarization on {audio_path}...")
+        return []
     diarization = pipeline(audio_path, num_speakers=2)
-
-    print("Loading Whisper model (base)...")
     whisper_model = whisper.load_model("base", device=device)
-
-    print("Loading audio file for transcription...")
     try:
         audio_waveform = whisper.load_audio(audio_path)
-        sample_rate = whisper.audio.SAMPLE_RATE # 16000
+        sample_rate = whisper.audio.SAMPLE_RATE
     except Exception as e:
-        print(f"Error loading audio file: {e}")
-        return
+        return []
 
-    print("Transcribing segments and writing to file...")
     
     all_segments = []
     for segment, track_id, label in diarization.itertracks(yield_label=True):
@@ -65,8 +56,7 @@ def transcribe_with_diarization(audio_path, output_file):
         })
     
     if not all_segments:
-        print("No speaker segments found by pyannote.")
-        return
+        return []
         
     all_segments.sort(key=lambda x: x['start'])
     
@@ -82,6 +72,8 @@ def transcribe_with_diarization(audio_path, output_file):
             current_segment = next_seg.copy()
     
     merged_segments.append(current_segment)
+
+    final_output_list = []
     
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(f"Transcription of {os.path.basename(audio_path)}\n\n")
@@ -101,16 +93,20 @@ def transcribe_with_diarization(audio_path, output_file):
 
             if text:
                 start_str = f"{int(start_time // 3600):02}:{int((start_time % 3600) // 60):02}:{start_time % 60:06.3f}"
-                end_str = f"{int(end_time // 3600):02}:{int((end_time % 3600) // 60):02}:{end_time % 60:06.3f}"
-                
+                end_str = f"{int(end_time // 3600 // 60):02}:{end_time % 60:06.3f}"
                 line = f"[{start_str} --> {end_str}] {label}: {text}\n"
                 
-                print(line, end="")
                 f.write(line)
-
-    print(f"\nTranscription complete! Saved to {output_file}")
+                
+                final_output_list.append([start_time, end_time, label, text])
+    return final_output_list
 
 if __name__ == "__main__":
     INPUT_AUDIO = "/home/dedsec995/Downloads/jeff.wav" 
-    OUTPUT_TRANSCRIPT = "/home/dedsec995/out.txt"
-    transcribe_with_diarization(INPUT_AUDIO, OUTPUT_TRANSCRIPT)
+    OUTPUT_TRANSCRIPT = "/home/dedsec995/assignment/DS_Assignment_3/playground/out.txt"
+    transcribed_data = transcribe_with_diarization(INPUT_AUDIO, OUTPUT_TRANSCRIPT)
+    
+    if transcribed_data:
+        print(transcribed_data)
+    else:
+        print("Transcription failed or returned no data.")
