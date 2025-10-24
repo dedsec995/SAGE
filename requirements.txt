@@ -4,3 +4,6 @@ pymupdf
 pinecone
 langchain_text_splitters
 openai
+litellm
+google-generativeai
+google-adk[database]
