@@ -1,6 +1,5 @@
 from google.adk.agents import Agent
 
-# Create the root cause agent
 root_cause_agent = Agent(
     name="root_cause_agent",
     model="gemini-2.0-flash",
