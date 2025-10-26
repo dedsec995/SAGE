@@ -1,11 +1,10 @@
 import asyncio
 
-# Import the main manager agent
-from manager_agent.agent import manager_agent
 from dotenv import load_dotenv
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
-from utils import call_agent_async
+from google.genai.types import Content, Part
+from manager.agent import manager_agent
 
 load_dotenv()
 
@@ -18,21 +17,15 @@ session_service = DatabaseSessionService(db_url=db_url)
 # ===== PART 2: Define Initial State =====
 # This will only be used when creating a new session
 initial_state = {
-    "user_name": "Brandon Hancock",
-    "intent_state": None,
-    "sentiment_state": None,
-    "root_cause_state": None,
-    "is_audio_transcribed": False,
-    "transcript": [],
-    "analysis_report": None,
-    "interaction_history": [],
+    "transcript": None,
+    "analysis": None,
 }
 
 
 async def main_async():
     # Setup constants
-    APP_NAME = "Bank Audio Transcript Analyst"
-    USER_ID = "aiwithbrandon"
+    APP_NAME = "Bank Audio Analysis"
+    USER_ID = "user123"
 
     # ===== PART 3: Session Management - Find or Create =====
     # Check for existing sessions for this user
@@ -57,7 +50,7 @@ async def main_async():
         print(f"Created new session: {SESSION_ID}")
 
     # ===== PART 4: Agent Runner Setup =====
-    # Create a runner with the main manager agent
+    # Create a runner with the manager agent
     runner = Runner(
         agent=manager_agent,
         app_name=APP_NAME,
@@ -65,8 +58,8 @@ async def main_async():
     )
 
     # ===== PART 5: Interactive Conversation Loop =====
-    print("\nWelcome to the Bank Audio Transcript Analyst!")
-    print("Your progress will be saved and remembered across conversations.")
+    print("\nWelcome to the Bank Audio Analysis Agent!")
+    print("You can provide an audio file path or a transcript.")
     print("Type 'exit' or 'quit' to end the conversation.\n")
 
     while True:
@@ -79,22 +72,12 @@ async def main_async():
             break
 
         # Process the user query through the agent
-        await call_agent_async(runner, USER_ID, SESSION_ID, user_input)
-
-    # ===== PART 6: State Examination =====
-    # Show final session state
-    final_session = await session_service.get_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
-    )
-    print("\nFinal Session State:")
-    for key, value in final_session.state.items():
-        print(f"{key}: {value}")
-
-
-def main():
-    """Entry point for the application."""
-    asyncio.run(main_async())
+        content = Content(role="user", parts=[Part(text=user_input)])
+        response = runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=content)
+        async for event in response:
+            if event.type == "output":
+                print(f"Agent: {event.content.parts[0].text}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())

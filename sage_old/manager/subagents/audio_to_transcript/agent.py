@@ -46,7 +46,7 @@ def transcribe_audio(filepath: str) -> dict:
         return {"error": f"An error occurred during transcription: {e}"}
 
 
-root_agent = Agent(
+audio_to_transcript = Agent(
     model='gemma-3-27b-it',
     name='audio_transcriber_agent',
     description="A specialized agent for processing and transcribing audio files with speaker diarization.",
