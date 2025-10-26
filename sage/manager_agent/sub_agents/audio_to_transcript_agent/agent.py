@@ -71,6 +71,8 @@ audio_to_transcript_agent = Agent(
     Transcription_object = [[start_time,end_time,speaker_name,actual_text]]
     IMPORTANT: Your response **MUST** be valid JSON matching this structure.
     DO NOT include any explanations or additional text outside the JSON response.
+    **Delegation:**
+    Always delegate task to the manager, if you don't know how to handle the user request
     """,
     tools=[transcribe_audio],
 )

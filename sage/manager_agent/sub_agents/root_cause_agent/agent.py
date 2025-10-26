@@ -50,6 +50,8 @@ root_cause_agent = Agent(
     You are an expert in root cause analysis for customer service calls.
     Your task is to analyze the provided call transcript to identify the underlying problem or recurring pain points.
     You have access to the 'analyze_root_cause' tool. Call this tool to perform the analysis and save the result to the state.
+    **Delegation:**
+    Always delegate task to the manager, if you don't know how to handle the user request
     """,
     tools=[analyze_root_cause],
 )
