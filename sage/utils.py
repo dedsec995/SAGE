@@ -4,13 +4,11 @@ from google.adk.events import Event
 from google.genai import types
 
 
-# ANSI color codes for terminal output
 class Colors:
     RESET = "\033[0m"
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
 
-    # Foreground colors
     BLACK = "\033[30m"
     RED = "\033[31m"
     GREEN = "\033[32m"
@@ -20,7 +18,6 @@ class Colors:
     CYAN = "\033[36m"
     WHITE = "\033[37m"
 
-    # Background colors
     BG_BLACK = "\033[40m"
     BG_RED = "\033[41m"
     BG_GREEN = "\033[42m"
@@ -43,35 +40,30 @@ async def display_state(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
 
-        # Format the output with clear sections
         print(f"\n{'-' * 10} {label} {'-' * 10}")
 
-        # Handle the user name
         user_name = session.state.get("user_name", "Unknown")
-        print(f"👤 User: {user_name}")
+        print(f"User: {user_name}")
 
-        # Handle analysis states
         intent_state = session.state.get("intent_state", "Not analyzed")
-        print(f"🎯 Intent: {intent_state}")
+        print(f"Intent: {intent_state}")
 
         sentiment_state = session.state.get("sentiment_state", "Not analyzed")
-        print(f"😊 Sentiment: {sentiment_state}")
+        print(f"Sentiment: {sentiment_state}")
 
         root_cause_state = session.state.get("root_cause_state", "Not analyzed")
-        print(f"🔍 Root Cause: {root_cause_state}")
+        print(f"Root Cause: {root_cause_state}")
 
         is_audio_transcribed = session.state.get("is_audio_transcribed", False)
-        print(f"🔊 Audio Transcribed: {is_audio_transcribed}")
+        print(f"Audio Transcribed: {is_audio_transcribed}")
 
         analysis_report = session.state.get("analysis_report", "Not generated")
-        print(f"📄 Analysis Report: {analysis_report}")
+        print(f"Analysis Report: {analysis_report}")
 
-        # Handle interaction history in a more readable way
         interaction_history = session.state.get("interaction_history", [])
         if interaction_history:
-            print("📝 Interaction History:")
+            print("Interaction History:")
             for idx, interaction in enumerate(interaction_history, 1):
-                # Pretty format dict entries, or just show strings
                 if isinstance(interaction, dict):
                     action = interaction.get("action", "interaction")
                     timestamp = interaction.get("timestamp", "unknown time")
@@ -82,7 +74,6 @@ async def display_state(
                     elif action == "agent_response":
                         agent = interaction.get("agent", "unknown")
                         response = interaction.get("response", "")
-                        # Truncate very long responses for display
                         if len(response) > 100:
                             response = response[:97] + "..."
                         print(f'  {idx}. {agent} response at {timestamp}: "{response}"')
@@ -99,16 +90,15 @@ async def display_state(
                 else:
                     print(f"  {idx}. {interaction}")
         else:
-            print("📝 Interaction History: None")
+            print("Interaction History: None")
 
-        # Show any additional state keys that might exist
         other_keys = [
             k
             for k in session.state.keys()
             if k not in ["user_name", "intent_state", "sentiment_state", "root_cause_state", "is_audio_transcribed", "analysis_report", "interaction_history"]
         ]
         if other_keys:
-            print("🔑 Additional State:")
+            print("Additional State:")
             for key in other_keys:
                 print(f"  {key}: {session.state[key]}")
 
@@ -121,14 +111,12 @@ async def process_agent_response(event):
     """Process and display agent response events."""
     print(f"Event ID: {event.id}, Author: {event.author}")
 
-    # Check for specific parts first
     has_specific_part = False
     if event.content and event.content.parts:
         for part in event.content.parts:
             if hasattr(part, "text") and part.text and not part.text.isspace():
                 print(f"  Text: '{part.text.strip()}'")
 
-    # Check for final response after specific parts
     final_response = None
     if not has_specific_part and event.is_final_response():
         if (
@@ -138,7 +126,6 @@ async def process_agent_response(event):
             and event.content.parts[0].text
         ):
             final_response = event.content.parts[0].text.strip()
-            # Use colors and formatting to make the final response stand out
             print(
                 f"\n{Colors.BG_BLUE}{Colors.WHITE}{Colors.BOLD}╔══ AGENT RESPONSE ═════════════════════════════════════════{Colors.RESET}"
             )
@@ -156,7 +143,6 @@ async def process_agent_response(event):
 
 async def call_agent_async(runner, user_id, session_id, query):
     """Call the agent asynchronously with the user's query."""
-    # Get the session and update the interaction history
     session = await runner.session_service.get_session(
         app_name=runner.app_name, user_id=user_id, session_id=session_id
     )
@@ -168,7 +154,6 @@ async def call_agent_async(runner, user_id, session_id, query):
         }
     )
 
-    # Create and append user query event
     user_query_event = Event(
         author="user",
         content=types.Content(role="user", parts=[types.Part(text=query)]),
@@ -182,7 +167,6 @@ async def call_agent_async(runner, user_id, session_id, query):
     final_response_text = None
     agent_name = None
 
-    # Display state before processing the message
     await display_state(
         runner.session_service,
         runner.app_name,
@@ -195,7 +179,6 @@ async def call_agent_async(runner, user_id, session_id, query):
         async for event in runner.run_async(
             user_id=user_id, session_id=session_id, new_message=content
         ):
-            # Capture the agent name from the event if available
             if event.author:
                 agent_name = event.author
 
@@ -205,7 +188,6 @@ async def call_agent_async(runner, user_id, session_id, query):
     except Exception as e:
         print(f"{Colors.BG_RED}{Colors.WHITE}ERROR during agent run: {e}{Colors.RESET}")
 
-    # Get the session and update the interaction history
     if final_response_text and agent_name:
         session = await runner.session_service.get_session(
             app_name=runner.app_name, user_id=user_id, session_id=session_id
@@ -219,7 +201,6 @@ async def call_agent_async(runner, user_id, session_id, query):
             }
         )
 
-        # Create and append agent response event
         agent_response_event = Event(
             author=agent_name,
             content=types.Content(
@@ -230,7 +211,6 @@ async def call_agent_async(runner, user_id, session_id, query):
             session=session, event=agent_response_event
         )
 
-    # Display state after processing the message
     await display_state(
         runner.session_service,
         runner.app_name,
