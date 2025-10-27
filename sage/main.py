@@ -18,7 +18,7 @@ session_service = DatabaseSessionService(db_url=db_url)
 # ===== PART 2: Define Initial State =====
 # This will only be used when creating a new session
 initial_state = {
-    "user_name": "Brandon Hancock",
+    "user_name": "Amit Luhar",
     "intent_state": None,
     "sentiment_state": None,
     "root_cause_state": None,
@@ -32,7 +32,7 @@ initial_state = {
 async def main_async():
     # Setup constants
     APP_NAME = "Bank Audio Transcript Analyst"
-    USER_ID = "aiwithbrandon"
+    USER_ID = "dedsec995"
 
     # ===== PART 3: Session Management - Find or Create =====
     # Check for existing sessions for this user
