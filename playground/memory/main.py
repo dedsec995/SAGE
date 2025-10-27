@@ -12,14 +12,14 @@ db_url = "sqlite:///./my_agent_data.db"
 session_service = DatabaseSessionService(db_url=db_url)
 
 initial_state = {
-    "user_name": "Brandon Hancock",
+    "user_name": "Amit Luhar",
     "reminders": [],
 }
 
 
 async def main_async():
     APP_NAME = "Memory Agent"
-    USER_ID = "aiwithbrandon"
+    USER_ID = "dedsec995"
 
     existing_sessions = await session_service.list_sessions(
         app_name=APP_NAME,

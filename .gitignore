@@ -10,6 +10,7 @@ old/
 frontend/
 backend/
 books/
+*.db
 
 # Distribution / packaging
 .Python
