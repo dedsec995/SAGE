@@ -32,8 +32,6 @@ intent_agent = Agent(
 
         Do not provide any other explanation or text in your response.
 
-        **Delegation:**
-        Always delegate task to the manager, if you don't know how to handle the user request
     """,
     output_key="intent_state",
 )

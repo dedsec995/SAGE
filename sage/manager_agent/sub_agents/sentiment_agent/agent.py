@@ -67,8 +67,7 @@ sentiment_agent = Agent(
     You are a sentiment analysis expert specializing in customer service calls.
     Your task is to analyze the provided call transcript to identify the emotional tone and satisfaction levels for each minute of the call.
     You have access to the 'analyze_sentiment_per_minute' tool. Call this tool to perform the analysis and save the results to the state.
-    **Delegation:**
-    Always delegate task to the manager, if you don't know how to handle the user request
+    
     """,
     tools=[analyze_sentiment_per_minute],
 )

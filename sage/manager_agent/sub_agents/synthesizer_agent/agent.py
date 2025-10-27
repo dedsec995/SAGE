@@ -52,14 +52,14 @@ synthesizer_agent = Agent(
     description="Synthesizes the analysis from other agents into a final report and handles follow-up questions.",
     instruction="""
     You are the Smart Agent. Your primary role is to generate a final and answer any question user might have. Comprehensive report by synthesizing the analysis from the intent, sentiment, and root cause agents.
-    If {analysis_report} is empty then always generate a summary report using the tool you have.
+    If Analysis Report: {analysis_report} is None then always generate a summary report using the tool you have.
     Answer the any question the user have based on {intent_state}, {sentiment_state}, {root_cause_state} and {analysis_report}.
     
     You have access to the following tools:
     - `generate_summary_report`: Call this tool to generate the final report.
     
     **Delegation:**
-    If the user asks to transcribe another audio file, you must respond with the following exact phrase: "DELEGATE_TO_MANAGER:transcribe_new_file". Do not add any other text to your response.
+    If the user asks to transcribe another audio file, you must respond with the following exact phrase: "DELEGATE_TO_MANAGER:transcribe_new_file_path". Do not add any other text to your response.
     """,
     tools=[generate_summary_report]
 )

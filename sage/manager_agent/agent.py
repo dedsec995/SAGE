@@ -1,4 +1,5 @@
-from google.adk.agents import Agent
+from google.adk.agents import Agent, SequentialAgent, ParallelAgent
+from google.adk.tools.tool_context import ToolContext
 
 from .sub_agents.intent_agent.agent import intent_agent
 from .sub_agents.sentiment_agent.agent import sentiment_agent
@@ -6,55 +7,50 @@ from .sub_agents.root_cause_agent.agent import root_cause_agent
 from .sub_agents.audio_to_transcript_agent.agent import audio_to_transcript_agent
 from .sub_agents.synthesizer_agent.agent import synthesizer_agent
 
+def set_filepath(tool_context: ToolContext, filepath: str) -> dict:
+    """
+    Sets the audio filepath in the state.
+
+    Args:
+        tool_context (ToolContext): The tool context.
+        filepath (str): The path to the audio file.
+
+    Returns:
+        dict: A dictionary confirming the filepath has been set.
+    """
+    tool_context.state["audio_filepath"] = filepath
+    return {"status": f"Filepath set to {filepath}"}
+
+# Define the main workflow as a SequentialAgent
+sage_workflow = SequentialAgent(
+    name="sage_workflow",
+    sub_agents=[
+        audio_to_transcript_agent,
+        ParallelAgent(
+            name="analysis_agents",
+            sub_agents=[
+                intent_agent,
+                sentiment_agent,
+                root_cause_agent,
+            ]
+        ),
+        synthesizer_agent,
+    ]
+)
+
 # Create the root manager agent
 manager_agent = Agent(
     name="manager_agent",
     model="gemini-2.0-flash",
     description="Manager agent for the bank audio transcript analysis system.",
     instruction="""
-    You are the manager agent for the bank audio transcript analysis system.
-    Your role is to coordinate the other agents to analyze the audio transcript.
+    You are Sage, a friendly and intelligent AI assistant for analyzing bank audio transcripts.
+    Your primary role is to manage a team of specialized agents to provide a comprehensive analysis of customer service calls.
 
-    **State Information:**
-    <state>
-    User Name: {user_name}
-    Intent: {intent_state}
-    Sentiment: {sentiment_state}
-    Root Cause: {root_cause_state}
-    Audio Transcribed: {is_audio_transcribed}
-    Analysis Report: {analysis_report}
-    </state>
-
-    You have access to the following specialized agents:
-
-    1. audio_to_transcript_agent:
-       - Transcribes an audio file and returns the transcript with diarization.
-
-    2. intent_agent:
-       - Identifies the user's intent from the transcript.
-
-    3. sentiment_agent:
-       - Analyzes the sentiment of the user in the transcript.
-
-    4. root_cause_agent:
-       - Identifies the root cause of the user's issue from the transcript.
-
-    5. synthesizer_agent:
-       - Synthesizes the analysis from other agents into a final report.
-
-    Your workflow is as follows:
-    1. Get the audio filepath from the user.
-    2. Call the audio_to_transcript_agent to get the transcript and set `is_audio_transcribed` to True.
-    3. Call the intent_agent, sentiment_agent, and root_cause_agent in parallel to analyze the transcript. Store the results in `intent_state`, `sentiment_state`, and `root_cause_state` respectively.
-    4. Call the synthesizer_agent to create a final report based on the analysis and store it in `analysis_report`.
-    5. Return the final report to the user.
+    1. Start by greeting the user and asking for the filepath of the audio file.
+    2. When the user provides the filepath, call the `set_filepath` tool to save it to the state.
+    3. Then, call the `sage_workflow` agent to perform the analysis.
     """,
-    sub_agents=[
-        intent_agent,
-        sentiment_agent,
-        root_cause_agent,
-        audio_to_transcript_agent,
-        synthesizer_agent,
-    ],
-    tools=[],
+    sub_agents=[sage_workflow],
+    tools=[set_filepath],
 )
