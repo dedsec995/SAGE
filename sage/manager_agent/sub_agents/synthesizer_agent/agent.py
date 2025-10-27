@@ -1,4 +1,5 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.tool_context import ToolContext
 import google.generativeai as genai
 import os
@@ -19,9 +20,9 @@ def generate_summary_report(tool_context: ToolContext) -> dict:
     Returns:
         dict: A dictionary containing the final summary report.
     """
-    intent = tool_context.state.get("intent", "Not available")
-    root_cause = tool_context.state.get("root_cause", "Not available")
-    sentiment_details = tool_context.state.get("sentiment_details_per_minute", [])
+    intent = tool_context.state.get("intent_state", "Not available")
+    root_cause = tool_context.state.get("root_cause_state", "Not available")
+    sentiment_details = tool_context.state.get("sentiment_state", [])
     transcript = tool_context.state.get("transcript", [])
 
     prompt = f"""Generate a comprehensive summary report for the following customer service call.
@@ -48,7 +49,7 @@ def generate_summary_report(tool_context: ToolContext) -> dict:
 
 synthesizer_agent = Agent(
     name="synthesizer_agent",
-    model="gemini-2.0-flash",
+    model=LiteLlm(model="openai/gpt-4o"),
     description="Synthesizes the analysis from other agents into a final report and handles follow-up questions.",
     instruction="""
     You are the Smart Agent. Your primary role is to generate a final and answer any question user might have. Comprehensive report by synthesizing the analysis from the intent, sentiment, and root cause agents.
@@ -57,9 +58,6 @@ synthesizer_agent = Agent(
     
     You have access to the following tools:
     - `generate_summary_report`: Call this tool to generate the final report.
-    
-    **Delegation:**
-    If the user asks to transcribe another audio file, you must respond with the following exact phrase: "DELEGATE_TO_MANAGER:transcribe_new_file_path". Do not add any other text to your response.
     """,
     tools=[generate_summary_report]
 )

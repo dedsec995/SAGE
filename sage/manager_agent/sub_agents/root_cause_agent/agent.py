@@ -1,4 +1,5 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.tool_context import ToolContext
 import google.generativeai as genai
 import os
@@ -44,7 +45,7 @@ def analyze_root_cause(tool_context: ToolContext) -> dict:
 
 root_cause_agent = Agent(
     name="root_cause_agent",
-    model="gemini-2.0-flash",
+    model=LiteLlm(model="openai/gpt-4o"),
     description="Identifies the root cause of the user's issue from the transcript.",
     instruction="""
     You are an expert in root cause analysis for customer service calls.

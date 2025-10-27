@@ -1,4 +1,5 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.tool_context import ToolContext
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -110,6 +111,7 @@ def transcribe_audio(tool_context: ToolContext) -> dict:
 audio_to_transcript_agent = Agent(
     name="audio_to_transcript_agent",
     model="gemini-2.0-flash",
+    # model=LiteLlm(model="openai/gpt-4o"),
     description="Transcribes an audio file and returns the transcript with diarization.",
     instruction="""
     You are the audio to transcript agent. Your role is to transcribe an audio file.

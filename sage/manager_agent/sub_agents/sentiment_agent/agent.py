@@ -1,4 +1,5 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.tool_context import ToolContext
 import google.generativeai as genai
 import math
@@ -61,7 +62,7 @@ def analyze_sentiment_per_minute(tool_context: ToolContext) -> dict:
 
 sentiment_agent = Agent(
     name="sentiment_agent",
-    model="gemini-2.0-flash",
+    model=LiteLlm(model="openai/gpt-4o"),
     description="Analyzes the emotional tone and satisfaction levels in the transcript.",
     instruction="""
     You are a sentiment analysis expert specializing in customer service calls.

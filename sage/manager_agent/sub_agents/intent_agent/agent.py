@@ -1,8 +1,9 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 
 intent_agent = Agent(
     name="IntentAgent",
-    model="gemini-2.0-flash",
+    model="gemma-3-27b-it",
     description="Identifies the user's intent from the transcript.",
     instruction="""
         You are an expert in analyzing banking call transcripts. Your task is to identify the primary intent of the customer from the provided transcript. The transcript is a list of segments, each with a speaker and their dialogue.
