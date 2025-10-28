@@ -58,13 +58,17 @@ def analyze_sentiment_by_minute(conversation: list) -> dict:
         )
 
         raw = resp["choices"][0]["message"]["content"]
+        #print("Raw model output:", raw)
         parsed = safe_parse_json(raw)
+        #print("Parsed JSON:", parsed)
 
         if parsed:
             label = parsed.get("label", "neutral")
             score = float(parsed.get("score", 0.5))
         else:
             label, score = "neutral", 0.5
+
+        #print(f"Final label: {label}, score: {score}")  # Confirm final values
 
         message_results.append({
             "start_t": start_t,
