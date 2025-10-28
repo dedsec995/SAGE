@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemma-3-27b-it')
 
 def analyze_sentiment_per_minute(tool_context: ToolContext) -> dict:
     """

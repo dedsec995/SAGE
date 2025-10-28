@@ -7,8 +7,17 @@ from manager_agent.agent import manager_agent
 from dotenv import load_dotenv
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
+import json
+
+from manager_agent.agent import manager_agent
+from dotenv import load_dotenv
+from google.adk.runners import Runner
+from google.adk.sessions import DatabaseSessionService
 from google.adk.events import Event
 from google.genai import types
+
+from utils import display_state, Colors
+
 # Load environment variables
 load_dotenv()
 
@@ -16,7 +25,12 @@ load_dotenv()
 APP_NAME = "Bank Audio Transcript Analyst"
 USER_ID = "dedsec995"
 DB_URL = "sqlite:///./my_agent_data.db"
-UPLOAD_DIR = "sage/uploaded_audio"
+
+# Construct absolute path for uploads
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+UPLOAD_DIR = os.path.join(PROJECT_ROOT, "sage", "uploaded_audio")
+
 
 initial_state = {
     "user_name": "Amit Luhar",
@@ -30,8 +44,59 @@ initial_state = {
     "interaction_history": [],
 }
 
-async def call_agent_async_ui(runner, session_id, query, chat_placeholder):
+def display_state_ui(session_state):
+    """Renders the session state in a visually appealing way in the UI."""
+    with st.expander("View Session State Details", expanded=False):
+        st.subheader("Session Details")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric(label="Intent", value=session_state.get("intent_state", "N/A"))
+            st.write("**Audio Transcribed?**")
+            st.write("Yes" if session_state.get("is_audio_transcribed") else "No")
+
+        with col2:
+            st.write("**Root Cause**")
+            root_cause = session_state.get("root_cause_state", "N/A")
+            try:
+                root_cause_dict = json.loads(root_cause)
+                st.info(root_cause_dict.get('root_cause', 'Not found'))
+            except (json.JSONDecodeError, TypeError):
+                st.info(root_cause)
+
+        st.subheader("Sentiment Analysis (Per Minute)")
+        sentiment_state = session_state.get("sentiment_state", [])
+        if sentiment_state:
+            for i, minute_sentiment in enumerate(sentiment_state):
+                st.write(f"**Minute {i+1}:**")
+                m_col1, m_col2 = st.columns(2)
+                m_col1.metric(label="Emotional Tone", value=minute_sentiment.get("emotional_tone", "N/A"))
+                m_col2.metric(label="Satisfaction Level", value=minute_sentiment.get("satisfaction_level", "N/A"))
+        else:
+            st.write("Not analyzed.")
+
+        st.subheader("File Information")
+        st.code(session_state.get("audio_filepath", "N/A"), language=None)
+
+async def log_event(event):
+    """Prints event details to the terminal."""
+    print(f"Event ID: {event.id}, Author: {event.author}")
+    if event.content and event.content.parts:
+        for part in event.content.parts:
+            if hasattr(part, "text") and part.text and not part.text.isspace():
+                print(f"  Text: '{part.text.strip()}'")
+
+async def call_agent_async_ui(runner, session_id, query, chat_placeholder, status_placeholder=None):
     """Call the agent asynchronously and display the response in the UI."""
+    print(f"\n{Colors.BG_GREEN}{Colors.BLACK}{Colors.BOLD}--- Running Query: {query} ---{Colors.RESET}")
+    await display_state(
+        runner.session_service,
+        runner.app_name,
+        USER_ID,
+        session_id,
+        "State BEFORE processing",
+    )
+
     # 1. Get the session and append the user query as an event first.
     session = await runner.session_service.get_session(
         app_name=runner.app_name, user_id=USER_ID, session_id=session_id
@@ -55,14 +120,35 @@ async def call_agent_async_ui(runner, session_id, query, chat_placeholder):
         async for event in runner.run_async(
             user_id=USER_ID, session_id=session_id, new_message=content
         ):
+            await log_event(event)
+            if status_placeholder and event.author:
+                status_text = f"Running {event.author}..."
+                if event.author == "audio_to_transcript_agent":
+                    status_text = "Transcribing audio..."
+                elif event.author == "IntentAgent":
+                    status_text = "Analyzing intent..."
+                elif event.author == "sentiment_agent":
+                    status_text = "Analyzing sentiment..."
+                elif event.author == "root_cause_agent":
+                    status_text = "原因 Analyzing root cause..."
+                elif event.author == "synthesizer_agent":
+                    status_text = "Generating final report..."
+                elif event.author == "manager_agent":
+                    status_text = "Orchestrating analysis..."
+                status_placeholder.text(status_text)
+
             if event.author:
                 agent_name = event.author
             if event.is_final_response() and event.content and event.content.parts:
                 final_response_text = event.content.parts[0].text.strip()
                 chat_placeholder.markdown(final_response_text)
+                if status_placeholder:
+                    status_placeholder.empty()
 
     except Exception as e:
         st.error(f"An error occurred during agent execution: {e}")
+        if status_placeholder:
+            status_placeholder.empty()
         return None
 
     # 3. Re-fetch the session and append the agent response.
@@ -85,16 +171,25 @@ async def call_agent_async_ui(runner, session_id, query, chat_placeholder):
         await runner.session_service.append_event(
             session=session, event=agent_response_event
         )
+    
+    await display_state(
+        runner.session_service,
+        runner.app_name,
+        USER_ID,
+        session_id,
+        "State AFTER processing",
+    )
+    print(f"{Colors.YELLOW}{'-' * 30}{Colors.RESET}")
     return final_response_text
 
 def home_page():
-    """Renders the home page for uploading audio files."""
+    """Renders the home page for uploading audio files and viewing past sessions."""
     st.title("SAGE - Smart Audio Guardian for Enterprises")
-    st.markdown("Welcome to SAGE, your intelligent assistant for analyzing customer service calls. Upload an audio file to begin.")
-    col1, col2 = st.columns([2, 1])
+    st.markdown("Welcome to SAGE. Upload a new audio file to begin an analysis, or revisit a previous session.")
 
-    with st.container():
-        st.subheader("Upload Audio File")
+    # --- Tile 1: Upload ---
+    with st.container(border=True):
+        st.subheader("Start New Analysis")
         uploaded_file = st.file_uploader(
             "Choose an audio file (.wav, .mp3, .m4a)",
             type=["wav", "mp3", "m4a"]
@@ -107,13 +202,58 @@ def home_page():
                 f.write(uploaded_file.getbuffer())
             st.success(f"File '{uploaded_file.name}' uploaded successfully!")
             if st.button("Analyze File"):
+                st.session_state.clear()
                 st.session_state.page = "analysis"
                 st.session_state.audio_path = file_path
-                st.session_state.session_id = str(uuid.uuid4()) # New session for each file
+                st.session_state.session_id = str(uuid.uuid4())
                 st.rerun()
+
+    # --- Tile 2: Previous Sessions ---
+    with st.container(border=True):
+        st.subheader("Previous Analyses")
+        session_service = DatabaseSessionService(db_url=DB_URL)
+        
+        try:
+            past_sessions = asyncio.run(session_service.list_sessions(app_name=APP_NAME, user_id=USER_ID))
+        except Exception as e:
+            st.error(f"Could not load past sessions: {e}")
+            return
+
+        # Filter for sessions that have a report
+        completed_sessions = [s for s in past_sessions.sessions if s.state.get("analysis_report")]
+
+        if not completed_sessions:
+            st.info("No previous analyses found.")
+        else:
+            cols = st.columns(3)
+            for i, session in enumerate(completed_sessions):
+                with cols[i % 3]:
+                    with st.container(border=True):
+                        filename = os.path.basename(session.state.get("audio_filepath", "Unknown File"))
+                        st.write(f"**{filename}**")
+                        
+                        if st.button("View Analysis", key=f"view_{session.id}"):
+                            st.session_state.clear()
+                            st.session_state.page = "analysis"
+                            st.session_state.session_id = session.id
+                            st.session_state.audio_path = session.state.get("audio_filepath")
+                            st.session_state.analysis_done = True
+                            st.session_state.report = session.state.get("analysis_report")
+                            
+                            chat_history = []
+                            # Skip the first two interactions (initial prompt and report)
+                            for interaction in session.state.get("interaction_history", [])[2:]:
+                                if interaction.get("action") == "user_query":
+                                    chat_history.append({"role": "user", "content": interaction.get("query")})
+                                elif interaction.get("action") == "agent_response":
+                                    chat_history.append({"role": "assistant", "content": interaction.get("response")})
+                            st.session_state.chat_history = chat_history
+                            
+                            st.rerun()
 
 def analysis_page():
     st.title("Analysis Report")
+
     audio_path = st.session_state.get("audio_path")
     session_id = st.session_state.get("session_id")
 
@@ -132,17 +272,15 @@ def analysis_page():
         session_service=session_service,
     )
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # --- Layout Setup ---
+    left_column, right_column = st.columns([2, 1])
+    with left_column:
+        st.subheader("Comprehensive Analysis")
+        report_placeholder = st.empty()
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Perform initial analysis if not already done
+    # --- Initial Analysis ---
     if "analysis_done" not in st.session_state:
         async def run_analysis():
-            # Create a new session with the audio path
             session_state = initial_state.copy()
             session_state["audio_filepath"] = audio_path
             await session_service.create_session(
@@ -152,32 +290,58 @@ def analysis_page():
                 state=session_state,
             )
 
-            with st.chat_message("assistant"):
-                with st.spinner("Analyzing audio... This may take a few minutes."):
-                    placeholder = st.empty()
+            with left_column:
+                with st.spinner("Starting analysis..."):
+                    status_placeholder = st.empty()
                     analysis_report = await call_agent_async_ui(
-                        runner, session_id, "Analyze the audio file", placeholder
+                        runner, session_id, "Analyze the audio file", report_placeholder, status_placeholder
                     )
+            
             if analysis_report:
-                st.session_state.messages.append({"role": "assistant", "content": analysis_report})
+                st.session_state.report = analysis_report
+                st.session_state.chat_history = []
                 st.session_state.analysis_done = True
+                st.rerun()
+
         asyncio.run(run_analysis())
-        st.rerun()
-    # Handle follow-up questions
-    if prompt := st.chat_input("Ask a follow-up question about the analysis..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        return # Stop execution until analysis is done and page reruns
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                placeholder = st.empty()
-                response = asyncio.run(call_agent_async_ui(runner, session_id, prompt, placeholder))
-                if response:
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-        st.rerun()
+    # --- Display Report and Chat UI ---
+    if st.session_state.get("analysis_done"):
+        report_placeholder.markdown(st.session_state.report)
 
-    if st.button("Analyze Another File"):
+        # Fetch the final state to display it
+        session = asyncio.run(runner.session_service.get_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=session_id
+        ))
+        
+        with left_column:
+            display_state_ui(session.state)
+
+        with right_column:
+            st.subheader("Follow-up Chat")
+
+            # Display chat messages from history
+            for message in st.session_state.chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            # Handle follow-up questions
+            if prompt := st.chat_input("Ask a follow-up question..."):
+                st.session_state.chat_history.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        response_placeholder = st.empty()
+                        status_placeholder = st.empty()
+                        response = asyncio.run(call_agent_async_ui(runner, session_id, prompt, response_placeholder, status_placeholder))
+                        if response:
+                            st.session_state.chat_history.append({"role": "assistant", "content": response})
+                            st.rerun()
+
+    if st.button("Back"):
         # Clear session state for next analysis
         for key in list(st.session_state.keys()):
             if key not in ['page']:

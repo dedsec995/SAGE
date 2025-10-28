@@ -71,6 +71,7 @@ def transcribe_audio(tool_context):
     audio_path = tool_context.state.get("audio_filepath")
     if not audio_path:
         raise Exception("error: Audio filepath not found in state. Stopping workflow.")
+    print(f"The file path: {audio_path}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     try:
         pipeline = Pipeline.from_pretrained(
@@ -142,7 +143,7 @@ def transcribe_audio(tool_context):
 
 audio_to_transcript_agent = Agent(
     name="audio_to_transcript_agent",
-    model="gemini-2.0-flash",
+    model="gemma-3-27b-it",
     # model=LiteLlm(model="openai/gpt-4o"),
     description="Transcribes an audio file and returns the transcript with diarization.",
     instruction="""
