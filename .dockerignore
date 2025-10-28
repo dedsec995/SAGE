@@ -1,0 +1,18 @@
+# Ignore Python virtual environment
+env/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore Git directory
+.git/
+.gitignore
+
+# Ignore local database and uploaded files (these should be mounted as volumes)
+my_agent_data.db
+sage/uploaded_audio/
+
+# Ignore IDE and development container configuration
+.vscode/
+.devcontainer/

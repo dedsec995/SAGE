@@ -10,6 +10,10 @@ old/
 frontend/
 backend/
 books/
+uploaded_audio/
+GEMINI.md
+inverstigation.md
+*.db
 
 # Distribution / packaging
 .Python
