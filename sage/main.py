@@ -23,6 +23,7 @@ initial_state = {
     "sentiment_state": None,
     "root_cause_state": None,
     "is_audio_transcribed": False,
+    "audio_filepath": None,
     "transcript": [],
     "analysis_report": None,
     "interaction_history": [],

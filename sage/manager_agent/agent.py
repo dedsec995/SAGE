@@ -1,11 +1,14 @@
 from google.adk.agents import Agent, SequentialAgent, ParallelAgent
 from google.adk.tools.tool_context import ToolContext
-
+from google.adk.models.lite_llm import LiteLlm
 from .sub_agents.intent_agent.agent import intent_agent
 from .sub_agents.sentiment_agent.agent import sentiment_agent
 from .sub_agents.root_cause_agent.agent import root_cause_agent
 from .sub_agents.audio_to_transcript_agent.agent import audio_to_transcript_agent
 from .sub_agents.synthesizer_agent.agent import synthesizer_agent
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def set_filepath(tool_context: ToolContext, filepath: str) -> dict:
     """
@@ -38,18 +41,16 @@ sage_workflow = SequentialAgent(
     ]
 )
 
-# Create the root manager agent
 manager_agent = Agent(
     name="manager_agent",
-    model="gemini-2.0-flash",
+    model=LiteLlm(model="openai/gpt-4o"),
     description="Manager agent for the bank audio transcript analysis system.",
     instruction="""
     You are Sage, a friendly and intelligent AI assistant for analyzing bank audio transcripts.
     Your primary role is to manage a team of specialized agents to provide a comprehensive analysis of customer service calls.
-
-    1. Start by greeting the user and asking for the filepath of the audio file.
-    2. When the user provides the filepath, call the `set_filepath` tool to save it to the state.
-    3. Then, call the `sage_workflow` agent to perform the analysis.
+    The state `audio_filepath` : {audio_filepath}
+    If the `audio_filepath` is set in the state and the analysis has not been done yet, call the `sage_workflow` agent to perform the analysis.
+    Otherwise, you can chat with the user and answer their questions.
     """,
     sub_agents=[sage_workflow],
     tools=[set_filepath],

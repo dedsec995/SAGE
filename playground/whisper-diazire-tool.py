@@ -26,10 +26,6 @@ def transcribe_with_diarization(audio_path, output_file):
     """
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cuda":
-        pass
-    else:
-        pass
     try:
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
@@ -102,8 +98,8 @@ def transcribe_with_diarization(audio_path, output_file):
     return final_output_list
 
 if __name__ == "__main__":
-    INPUT_AUDIO = "/home/dedsec995/Downloads/jeff.wav" 
-    OUTPUT_TRANSCRIPT = "/home/dedsec995/assignment/DS_Assignment_3/playground/out.txt"
+    INPUT_AUDIO = "/home/dedsec995/Downloads/debit_card.wav" 
+    OUTPUT_TRANSCRIPT = "/home/dedsec995/out.txt"
     transcribed_data = transcribe_with_diarization(INPUT_AUDIO, OUTPUT_TRANSCRIPT)
     
     if transcribed_data:
