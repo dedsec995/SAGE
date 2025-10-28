@@ -6,7 +6,8 @@ The system is built with a modern Streamlit user interface, allowing users to ea
 
 ## Features
 
-- **Automated Transcription & Diarization**: Utilizes OpenAI's GPT-4o to generate accurate, speaker-separated transcripts from audio files.
+- **Automated Transcription & Diarization**: Utilizes OpenAI's gpt-4o-transcribe-diarize to generate accurate, speaker-separated transcripts from audio files.\
+Alternate option is also available for offline using whisper and pyannote
 - **In-Depth Call Analysis**: A parallel team of agents work together to identify:
   - **Intent Recognition**: The primary reason for the customer's call.
   - **Sentiment Analysis**: The emotional tone and satisfaction level for each minute of the call.
@@ -28,6 +29,7 @@ The system is built with a modern Streamlit user interface, allowing users to ea
 - **AI Models**:
   - OpenAI GPT-4o (for transcription and diarization)
   - Google Gemini Flash (for analysis and synthesis)
+  - Gemma 3 27B (for light weight tasks)
 - **Core Libraries**:
   - `google-adk`
   - `streamlit`
@@ -81,18 +83,40 @@ Follow these instructions to set up and run the project on your local machine.
     ```
 2.  Your web browser should open with the SAGE home page.
 3.  **To start a new analysis:**
-    - Use the file uploader to select an audio file (`.wav`, `.mp3`, `.m4a`).
+    - Use the file uploader to select an audio file (`.wav` only).
     - Click the "Analyze File" button.
 4.  **To revisit a past analysis:**
-    - Find the session in the "Previous Analyses" section.
+    - Find the session in the "Previous Wisdom" section.
     - Click the "View Analysis" button.
+
+## 🐳 Running with Docker
+
+Alternatively, you can run the application inside a Docker container for better portability and dependency management.
+
+1.  **Build the Docker image:**
+    From the root of the project directory, run:
+    ```sh
+    docker build -t sage-app .
+    ```
+
+2.  **Run the Docker container:**
+    Execute the following command. This will start the container, map the necessary ports, pass your API keys from the `.env` file, and mount local directories for data persistence.
+    ```sh
+    docker run -p 8501:8501 --env-file .env \
+      -v ./my_agent_data.db:/app/my_agent_data.db \
+      -v ./sage/uploaded_audio:/app/sage/uploaded_audio \
+      sage-app
+    ```
+
+3.  **Access the application:**
+    Open your web browser and navigate to `http://localhost:8501`.
 
 ## Project Structure
 
 ```
 /SAGE
 ├── sage/
-│   ├── ui.py                # Main Streamlit application UI
+│   ├── app.py                # Main Streamlit application UI
 │   ├── main.py              # Original CLI application entry point
 │   ├── utils.py             # CLI utility functions (logging, colors)
 │   ├── manager_agent/       # Contains the main manager agent

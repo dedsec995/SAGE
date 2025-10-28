@@ -8,11 +8,8 @@ from dotenv import load_dotenv
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 import json
+import streamlit.components.v1 as com
 
-from manager_agent.agent import manager_agent
-from dotenv import load_dotenv
-from google.adk.runners import Runner
-from google.adk.sessions import DatabaseSessionService
 from google.adk.events import Event
 from google.genai import types
 
@@ -29,7 +26,7 @@ DB_URL = "sqlite:///./my_agent_data.db"
 # Construct absolute path for uploads
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
-UPLOAD_DIR = os.path.join(PROJECT_ROOT, "sage", "uploaded_audio")
+UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploaded_audio")
 
 
 initial_state = {
@@ -184,15 +181,19 @@ async def call_agent_async_ui(runner, session_id, query, chat_placeholder, statu
 
 def home_page():
     """Renders the home page for uploading audio files and viewing past sessions."""
-    st.title("SAGE - Smart Audio Guardian for Enterprises")
-    st.markdown("Welcome to SAGE. Upload a new audio file to begin an analysis, or revisit a previous session.")
+    col1, col2 = st.columns([10,7])
+    with col1:
+        st.title("S.A.G.E. Assistant")
+        st.markdown("Every call tells a story, SAGE makes sure you hear the truth behind the tone")
+    with col2:
+        com.iframe("https://lottie.host/embed/74230abb-884a-444d-92fe-273821e58451/YfEl3zsnUd.lottie", height=100)
 
     # --- Tile 1: Upload ---
     with st.container(border=True):
         st.subheader("Start New Analysis")
         uploaded_file = st.file_uploader(
-            "Choose an audio file (.wav, .mp3, .m4a)",
-            type=["wav", "mp3", "m4a"]
+            "Choose an audio file (.wav only)",
+            type=["wav"]
         )
         if uploaded_file is not None:
             if not os.path.exists(UPLOAD_DIR):
@@ -210,7 +211,7 @@ def home_page():
 
     # --- Tile 2: Previous Sessions ---
     with st.container(border=True):
-        st.subheader("Previous Analyses")
+        st.subheader("Previous Wisdom")
         session_service = DatabaseSessionService(db_url=DB_URL)
         
         try:
