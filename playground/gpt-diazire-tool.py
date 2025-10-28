@@ -18,10 +18,16 @@ def transcribe_audio(filepath: str) -> dict:
     )
 
   modified_output = [
-      [segment['start'], segment['end'], segment['speaker'], segment['text'].strip()]
-      for segment in transcript.segments
-  ]
+    [segment.start, segment.end, segment.speaker, segment.text.strip()]
+    for segment in transcript.segments
+]
 
   print(modified_output) # TODO: Remove in Future, debug print
-  return {'Transcription': modified_output}
+  print()
+  print()
+  print()
+  print(transcript)
+  return {'Transcription': transcript}
+
+transcribe_audio('/home/dedsec995/Downloads/debit_card.wav')
 
