@@ -87,7 +87,7 @@ def analyze_sentiment_by_minute(conversation: list) -> dict:
             label, score = "neutral", 0.5
 
         # Show parsed result
-        print(f" Parsed Emotion: {label} | Score: {score}")
+        #print(f" Parsed Emotion: {label} | Score: {score}")
 
         # Add to summary
         minute_label = f"{minute} to {minute + 1}"
@@ -125,57 +125,32 @@ def analyze_sentiment_by_minute(conversation: list) -> dict:
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
     conversation = [
-        [1.776, 2.376, "A", "Hello."],
-        [3.126, 3.676, "B", "Hi."],
-        [3.976, 5.976, "B", "Thank you for calling JB Morgan Chase."],
-        [6.076, 7.026, "B", "My name is Ahmed."],
-        [7.226, 8.126, "B", "How can I help you?"],
-        [9.176, 11.076, "A", "Well, how can you help me?"],
-        [13.326, 17.776, "B", "Whatever the issue is, we could discuss and have it solved."],
-        [18.226, 20.076, "B", "Can I know your first name, sir?"],
-        [21.026, 24.876, "A", "My name is Jeff, and my credit card isn't working."],
-        [26.484, 28.434, "B", "Oh, I'm so sorry to hear that Jeff."],
-        [28.884, 34.734, "B", "All right, I'll just need a few basic details from you and we'll have a look into it."],
-        [34.884, 36.234, "B", "So what's your full name?"],
-        [37.334, 39.084, "A", "Jeff Jefferson,"],
-        [39.384, 40.434, "A", "January"],
-        [40.434, 41.484, "B", "All right, Mr."],
-        [41.584, 41.884, "B", "Jefferson,"],
-        [41.984, 43.584, "B", "can I know your birth date?"],
-        [45.984, 47.634, "A", "1st, 1990."],
-        [48.984, 49.984, "B", "Okay, thank you."],
-        [50.134, 53.084, "B", "Also, can I, if you have your account number handy,"],
-        [53.234, 54.384, "B", "can I get that?"],
-        [56.148, 56.748, "A", "Fine."],
-        [56.798, 58.048, "A", "Let me find it."],
-        [59.098, 62.298, "A", "5-5-5-5-5-5-5-5-5."],
-        [63.998, 65.798, "B", "Alright, thank you, Mr."],
-        [65.948, 66.348, "B", "Jefferson."],
-        [66.548, 71.048, "B", "So, I'm sorry I could not see any record in my system."],
-        [73.848, 75.398, "A", "So much help you were."],
-        [77.448, 79.398, "B", "So sorry, could you repeat,"],
-        [79.648, 82.148, "B", "can I know your debit card number?"],
-        [83.38, 85.38, "A", "Do you need my social security number too?"],
-        [85.48, 88.28, "B", "No, that won't be necessary."],
-        [88.68, 92.23, "B", "Can I just have your credit card number so I could look at you in my system?"],
-        [93.73, 94.38, "A", "Let's see,"],
-        [94.73, 99.98, "A", "uh, two one two three three four five nine nine two."],
-        [100.73, 101.33, "B", "Okay,"],
-        [101.43, 103.43, "B", "and can I know the CVV on it?"],
-        [104.38, 105.18, "A", "Three twenty."],
-        [109.14, 116.09, "B", "Alright, thank you Mr. Jefferson. Sorry I'm so sorry for your inconvenience. Um what were you calling regarding?"],
-        [117.19, 118.69, "A", "That credit card isn't working."],
-        [120.44, 124.54, "B", "Okay, uh what issues or challenges are you facing?"],
-        [124.69, 125.44, "B", "Okay,"],
-        [125.79, 129.74, "A", "When I try to go to pay for something it says something's wrong."],
-        [131.84, 136.24, "B", "do you know any specific or when was the card activated?"],
-        [137.49, 139.59, "A", "I don't know, like a few months ago?"],
-        [140.64, 144.04, "B", "Well the card show is fine on our system okay"],
-        [148.09, 149.44, "A", "Well, it's not fine."],
-        [153.94, 160.74, "B", "let me transfer my call let me transfer a call to the technical team they might help you out please"],
-        [160.74, 161.24, "A", "Fine."],
-        [161.24, 162.94, "B", "hold on the line"]
-        ]
+    # 0–1 min → Anger
+    [5.0, 10.0, "A", "This is unacceptable! I’ve been waiting for 20 minutes and nobody’s helping me!"],
+    [15.0, 20.0, "B", "Sir, please lower your voice. I’m here to help, but I need to know what happened."],
+    [30.0, 50.0, "A", "What happened? Your service failed! My card got blocked for no reason!"],
+
+    # 1–2 min → Frustration
+    [65.0, 75.0, "A", "I already told you my account number twice. Why do you keep asking again?"],
+    [80.0, 90.0, "B", "I’m just verifying your details for security purposes, sir."],
+    [95.0, 100.0, "A", "This is so slow. You people really need to fix your systems."],
+
+    # 2–3 min → Calm
+    [125.0, 135.0, "B", "Thank you for confirming, Mr. Davis. I’m checking your account right now."],
+    [140.0, 150.0, "A", "Okay, I understand. Please take your time."],
+    [155.0, 165.0, "B", "Everything seems fine on our end. Let’s try a small reset, shall we?"],
+
+    # 3–4 min → Apology
+    [185.0, 190.0, "A", "I’m sorry for being rude earlier. I was just really stressed out."],
+    [195.0, 205.0, "B", "That’s completely fine, I understand your frustration. Thank you for apologizing."],
+    [210.0, 220.0, "A", "I appreciate your patience too, really."],
+
+    # 4–5 min → Satisfaction
+    [245.0, 255.0, "B", "Looks like the issue is fixed now, your card should work again."],
+    [260.0, 270.0, "A", "Oh, thank you so much! It finally went through."],
+    [275.0, 285.0, "A", "You’ve been really helpful today, I appreciate it!"]
+]
+
 
     result = analyze_sentiment_by_minute(conversation)
 
