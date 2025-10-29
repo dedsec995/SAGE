@@ -9,6 +9,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 import json
 import streamlit.components.v1 as com
+from streamlit_card import card
 
 from google.adk.events import Event
 from google.genai import types
@@ -44,36 +45,50 @@ initial_state = {
 def display_state_ui(session_state):
     """Renders the session state in a visually appealing way in the UI."""
     with st.expander("View Session State Details", expanded=False):
-        st.subheader("Session Details")
-        
+        st.subheader("Details")
+        st.subheader("Intent Analysis")
         col1, col2 = st.columns(2)
         with col1:
-            st.metric(label="Intent", value=session_state.get("intent_state", "N/A"))
-            st.write("**Audio Transcribed?**")
-            st.write("Yes" if session_state.get("is_audio_transcribed") else "No")
-
+            st.metric(label="Intent", value=session_state.get("intent_state", "N/A"),)
         with col2:
-            st.write("**Root Cause**")
-            root_cause = session_state.get("root_cause_state", "N/A")
-            try:
-                root_cause_dict = json.loads(root_cause)
-                st.info(root_cause_dict.get('root_cause', 'Not found'))
-            except (json.JSONDecodeError, TypeError):
-                st.info(root_cause)
+            st.metric(label="Audio Transcribed?", value = "Yes" if session_state.get("is_audio_transcribed") else "No")
+        
+        st.subheader("Root Cause Analysis")
+        root_cause = session_state.get("root_cause_state", "N/A")
+        try:
+            root_cause_dict = json.loads(root_cause)
+            st.info(root_cause_dict.get('root_cause', 'Not found'))
+        except (json.JSONDecodeError, TypeError):
+            st.info(root_cause['root_cause'])
 
-        st.subheader("Sentiment Analysis (Per Minute)")
-        sentiment_state = session_state.get("sentiment_state", [])
-        if sentiment_state:
-            for i, minute_sentiment in enumerate(sentiment_state):
-                st.write(f"**Minute {i+1}:**")
-                m_col1, m_col2 = st.columns(2)
-                m_col1.metric(label="Emotional Tone", value=minute_sentiment.get("emotional_tone", "N/A"))
-                m_col2.metric(label="Satisfaction Level", value=minute_sentiment.get("satisfaction_level", "N/A"))
+        st.subheader("Sentiment Analysis")
+        sentiment_state = session_state.get("sentiment_state")
+
+        if isinstance(sentiment_state, str):
+            try:
+                sentiment_state = json.loads(sentiment_state)
+            except json.JSONDecodeError:
+                sentiment_state = None
+        
+        if isinstance(sentiment_state, dict):
+            s_col1, s_col2 = st.columns(2)
+            s_col1.metric("Overall Sentiment", sentiment_state.get("sentiment_overall", "N/A"))
+            s_col2.metric("Overall Score", f'{sentiment_state.get("overall_score", 0.0):.2f}')
+
+            st.write(f"**Granularity:** {sentiment_state.get('granularity', 'N/A')}")
+
+            st.write("**Timeline:**")
+            timeline = sentiment_state.get("timeline", [])
+            if timeline:
+                for entry in timeline:
+                    st.write(f"- **{entry.get('minute', 'N/A')}:** {entry.get('label', 'N/A')} (Score: {entry.get('score', 0.0):.2f}, Messages: {entry.get('message_count', 0)})")
+            else:
+                st.write("No timeline data available.")
         else:
             st.write("Not analyzed.")
 
         st.subheader("File Information")
-        st.code(session_state.get("audio_filepath", "N/A"), language=None)
+        st.info(session_state.get("audio_filepath", "N/A"))
 
 async def log_event(event):
     """Prints event details to the terminal."""
@@ -179,16 +194,85 @@ async def call_agent_async_ui(runner, session_id, query, chat_placeholder, statu
     print(f"{Colors.YELLOW}{'-' * 30}{Colors.RESET}")
     return final_response_text
 
+def load_session_callback(session_data):
+    """
+    Callback function to load a selected session's state and switch to the
+    analysis page. This is triggered by on_click from a streamlit-card.
+    """
+    st.session_state.clear()
+    st.session_state.page = "analysis"
+    st.session_state.session_id = session_data.id
+    st.session_state.audio_path = session_data.state.get("audio_filepath")
+    st.session_state.analysis_done = True
+    st.session_state.report = session_data.state.get("analysis_report")
+    
+    chat_history = []
+    # Skip the first two interactions (initial prompt and report)
+    for interaction in session_data.state.get("interaction_history", [])[2:]:
+        if interaction.get("action") == "user_query":
+            chat_history.append({"role": "user", "content": interaction.get("query")})
+        elif interaction.get("action") == "agent_response":
+            chat_history.append({"role": "assistant", "content": interaction.get("response")})
+    st.session_state.chat_history = chat_history
+    
+    st.rerun()
+
 def home_page():
     """Renders the home page for uploading audio files and viewing past sessions."""
     col1, col2 = st.columns([10,7])
     with col1:
-        st.title("S.A.G.E. Assistant")
+        st.title("S.A.G.E. Assistant",anchor=False)
         st.markdown("Every call tells a story, SAGE makes sure you hear the truth behind the tone")
     with col2:
         com.iframe("https://lottie.host/embed/74230abb-884a-444d-92fe-273821e58451/YfEl3zsnUd.lottie", height=100)
 
-    # --- Tile 1: Upload ---
+    # --- Tile 1: Previous Sessions ---
+    with st.container(border=True):
+        st.subheader("Previous Wisdoms",anchor=False)
+        session_service = DatabaseSessionService(db_url=DB_URL)
+        
+        try:
+            past_sessions = asyncio.run(session_service.list_sessions(app_name=APP_NAME, user_id=USER_ID))
+        except Exception as e:
+            st.error(f"Could not load past sessions: {e}")
+            return
+
+        completed_sessions = [s for s in past_sessions.sessions if s.state.get("analysis_report")]
+
+        if not completed_sessions:
+            st.info("No previous analyses found.")
+        else:
+            cols = st.columns(3)
+            for i, session in enumerate(completed_sessions):
+                with cols[i % 3]:
+                    filename = os.path.basename(session.state.get("audio_filepath", "Unknown File"))
+                    card(
+                        title=filename,
+                        text=f"Analyzed",
+                        image="https://cdn-icons-png.flaticon.com/512/1001/1001344.png", 
+                        styles={
+                            "card": {
+                                "width": "100%",
+                                "margin": "0px",
+                                "box-shadow": "0 0 5px rgba(0,0,0,0.1)",
+                                "height": "300px"
+                            },
+                            "title": {
+                                "font-size": "30px",
+                                "font-weight": "bold",
+                                "white-space": "nowrap",
+                                "overflow": "hidden",
+                                "text-overflow": "ellipsis"
+                            },
+                            "text": {
+                                "font-size": "14px"
+                            }
+                        },
+                        on_click=lambda s=session: load_session_callback(session_data=s),
+                        key=f"card_{session.id}"
+                    )
+
+    # --- Tile 2: Upload ---
     with st.container(border=True):
         st.subheader("Start New Analysis")
         uploaded_file = st.file_uploader(
@@ -208,49 +292,6 @@ def home_page():
                 st.session_state.audio_path = file_path
                 st.session_state.session_id = str(uuid.uuid4())
                 st.rerun()
-
-    # --- Tile 2: Previous Sessions ---
-    with st.container(border=True):
-        st.subheader("Previous Wisdom")
-        session_service = DatabaseSessionService(db_url=DB_URL)
-        
-        try:
-            past_sessions = asyncio.run(session_service.list_sessions(app_name=APP_NAME, user_id=USER_ID))
-        except Exception as e:
-            st.error(f"Could not load past sessions: {e}")
-            return
-
-        # Filter for sessions that have a report
-        completed_sessions = [s for s in past_sessions.sessions if s.state.get("analysis_report")]
-
-        if not completed_sessions:
-            st.info("No previous analyses found.")
-        else:
-            cols = st.columns(3)
-            for i, session in enumerate(completed_sessions):
-                with cols[i % 3]:
-                    with st.container(border=True):
-                        filename = os.path.basename(session.state.get("audio_filepath", "Unknown File"))
-                        st.write(f"**{filename}**")
-                        
-                        if st.button("View Analysis", key=f"view_{session.id}"):
-                            st.session_state.clear()
-                            st.session_state.page = "analysis"
-                            st.session_state.session_id = session.id
-                            st.session_state.audio_path = session.state.get("audio_filepath")
-                            st.session_state.analysis_done = True
-                            st.session_state.report = session.state.get("analysis_report")
-                            
-                            chat_history = []
-                            # Skip the first two interactions (initial prompt and report)
-                            for interaction in session.state.get("interaction_history", [])[2:]:
-                                if interaction.get("action") == "user_query":
-                                    chat_history.append({"role": "user", "content": interaction.get("query")})
-                                elif interaction.get("action") == "agent_response":
-                                    chat_history.append({"role": "assistant", "content": interaction.get("response")})
-                            st.session_state.chat_history = chat_history
-                            
-                            st.rerun()
 
 def analysis_page():
     st.title("Analysis Report")

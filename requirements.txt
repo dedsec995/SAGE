@@ -9,6 +9,8 @@ google-generativeai
 google-adk[database]
 streamlit
 streamlit-elements
+streamlit_card
+streamlit-float
 torch==2.8.0
 torchaudio==2.8.0
 torchvision==0.23.0

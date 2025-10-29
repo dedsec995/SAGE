@@ -1,3 +1,5 @@
+import json
+import re
 from google.adk.agents import Agent
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.tools.tool_context import ToolContext
@@ -8,6 +10,14 @@ load_dotenv()
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemma-3-27b-it')
+
+def safe_parse_json(raw):
+    """Safely parse model output even if wrapped in markdown."""
+    cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
 
 def analyze_root_cause(tool_context: ToolContext) -> dict:
     """
@@ -36,7 +46,7 @@ def analyze_root_cause(tool_context: ToolContext) -> dict:
 
     response = model.generate_content(prompt)
     try:
-        root_cause = response.text.strip()
+        root_cause = safe_parse_json(response.text)
     except Exception as e:
         root_cause = {"error": str(e)}
 

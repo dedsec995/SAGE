@@ -5,60 +5,93 @@ import google.generativeai as genai
 import math
 import os
 import json
+import re
+from collections import defaultdict, Counter
+from litellm import completion
 from dotenv import load_dotenv
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemma-3-27b-it')
 
+def safe_parse_json(raw):
+    """Safely parse model output even if wrapped in markdown."""
+    cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        return None
+
 def analyze_sentiment_per_minute(tool_context: ToolContext) -> dict:
     """
     Analyzes the emotional tone and satisfaction level of the transcript per minute and saves it to the state.
-
-    Args:
-        tool_context (ToolContext): The tool context containing the transcript.
-
-    Returns:
-        dict: A dictionary containing the sentiment details per minute.
     """
     transcript = tool_context.state.get("transcript")
     if not transcript:
         return {"error": "Transcript not found in state."}
 
-    sentiment_details_per_minute = []
-    max_time = max(segment[1] for segment in transcript)
-    num_minutes = math.ceil(max_time / 60)
+    minute_buckets = defaultdict(list)
+    for entry in transcript:
+        start_t, end_t, speaker, text = entry
+        minute_index = int(math.floor(start_t / 60))
+        minute_buckets[minute_index].append((speaker, text))
 
-    for minute in range(num_minutes):
-        start_time = minute * 60
-        end_time = (minute + 1) * 60
-        minute_transcript = [segment for segment in transcript if segment[0] >= start_time and segment[0] < end_time]
+    minute_summary = []
+    for minute, msgs in sorted(minute_buckets.items()):
+        combined_text = " ".join([f"{speaker}: {text}" for speaker, text in msgs])
 
-        if not minute_transcript:
-            sentiment_details_per_minute.append({"emotional_tone": "Neutral", "satisfaction_level": "Neutral"})
-            continue
+        resp = completion(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a precise emotion detection model for customer conversations. "
+                        "Analyze the following 1-minute transcript and identify the *dominant emotion* clearly. "
+                        "Differentiate carefully between: "
+                        "Anger (aggressive, raised voice), "
+                        "Frustration (annoyed or impatient tone), "
+                        "Calm (neutral or polite tone), "
+                        "Apology (expressing regret), and "
+                        "Satisfaction (happy or thankful tone). "
+                        "Return only JSON: {\"label\": <emotion>, \"score\": <0-1>}."
+                    ),
+                },
+                {"role": "user", "content": combined_text},
+            ],
+        )
 
-        full_text = " ".join(segment[3] for segment in minute_transcript)
+        raw = resp["choices"][0]["message"]["content"]
+        parsed = safe_parse_json(raw)
+        label = parsed.get("label", "neutral") if parsed else "neutral"
+        score = float(parsed.get("score", 0.5)) if parsed else 0.5
         
-        prompt = f"""Analyze the emotional tone and satisfaction level of the following text from a customer service call. 
-        Respond with a JSON object with two keys: 'emotional_tone' and 'satisfaction_level'.
-        
-        Possible values for 'emotional_tone': Angry, Frustrated, Happy, Calm, Anxious, Neutral.
-        Possible values for 'satisfaction_level': Very Satisfied, Satisfied, Neutral, Dissatisfied, Very Dissatisfied.
-        
-        Text: {full_text}
-        """
-        
-        response = model.generate_content(prompt)
-        try:
-            sentiment_details = json.loads(response.text.strip())
-        except json.JSONDecodeError:
-            sentiment_details = {"emotional_tone": "Neutral", "satisfaction_level": "Neutral"}
+        minute_label = f"{minute} to {minute + 1}"
+        minute_summary.append({
+            "minute": minute_label,
+            "label": label,
+            "score": round(score, 2),
+            "message_count": len(msgs)
+        })
 
-        sentiment_details_per_minute.append(sentiment_details)
+    label_counts = Counter(m["label"] for m in minute_summary)
+    score_totals = defaultdict(float)
+    for m in minute_summary:
+        score_totals[m["label"]] += m["score"]
 
-    tool_context.state["sentiment_state"] = sentiment_details_per_minute
-    return {"sentiment": sentiment_details_per_minute}
+    avg_scores = {l: score_totals[l] / label_counts[l] for l in label_counts}
+    overall_label = max(label_counts, key=label_counts.get)
+    overall_score = round(avg_scores[overall_label], 2)
+
+    result = {
+        "sentiment_overall": overall_label,
+        "overall_score": overall_score,
+        "granularity": "1-minute",
+        "timeline": minute_summary
+    }
+
+    tool_context.state["sentiment_state"] = result
+    return result
 
 sentiment_agent = Agent(
     name="sentiment_agent",
